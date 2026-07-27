@@ -270,6 +270,13 @@ export const PanelInner = () => {
         if (value === "HTTP Request") {
           newConfig.httpMethod = "POST";
         }
+        if (value === "Log") {
+          newConfig.logMessage =
+            (selectedNode.data.config?.logMessage as string) ||
+            "👋 Hello from Vercel Workflow!";
+          newConfig.logLevel =
+            (selectedNode.data.config?.logLevel as string) || "info";
+        }
       } else {
         // Normal update: spread existing config
         newConfig = { ...selectedNode.data.config, [key]: value };

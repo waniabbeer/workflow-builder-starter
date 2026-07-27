@@ -47,6 +47,20 @@ export const pendingIntegrationNodesAtom = atom<Set<string>>(new Set<string>());
 // This allows keyboard shortcuts to trigger the same execute flow as the button
 export const triggerExecuteAtom = atom(false);
 
+/** Last POST /api/workflow/.../execute response (Hello Workflow lesson feedback) */
+export type LastExecuteApiResponse = {
+  path: string;
+  statusCode: number;
+  durationMs: number;
+  executionId: string;
+  status: string;
+  at: number;
+};
+
+export const lastExecuteApiResponseAtom = atom<LastExecuteApiResponse | null>(
+  null
+);
+
 // Execution log entry type for storing run outputs per node
 export type ExecutionLogEntry = {
   nodeId: string;

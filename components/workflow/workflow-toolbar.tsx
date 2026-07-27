@@ -50,6 +50,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { api } from "@/lib/api-client";
+import {
+  postWorkflowExecute,
+  validateWorkflowNodesForRun,
+} from "@/lib/execute-workflow-client";
 import { useSession } from "@/lib/auth-client";
 import {
   addNodeAtom,
@@ -65,6 +69,7 @@ import {
   isExecutingAtom,
   isGeneratingAtom,
   isSavingAtom,
+  lastExecuteApiResponseAtom,
   nodesAtom,
   propertiesPanelActiveTabAtom,
   redoAtom,
@@ -77,6 +82,7 @@ import {
   updateNodeDataAtom,
   type WorkflowEdge,
   type WorkflowNode,
+  type LastExecuteApiResponse,
 } from "@/lib/workflow-store";
 import { Panel } from "../ai-elements/panel";
 import { DeployButton } from "../deploy-button";
@@ -113,6 +119,9 @@ type ExecuteTestWorkflowParams = {
   pollingIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>;
   setIsExecuting: (value: boolean) => void;
   setSelectedExecutionId: (value: string | null) => void;
+  setLastExecuteApiResponse?: (
+    value: LastExecuteApiResponse | null
+  ) => void;
 };
 
 async function executeTestWorkflow({
@@ -122,6 +131,7 @@ async function executeTestWorkflow({
   pollingIntervalRef,
   setIsExecuting,
   setSelectedExecutionId,
+  setLastExecuteApiResponse,
 }: ExecuteTestWorkflowParams) {
   // Set all nodes to idle first
   updateNodesStatus(nodes, updateNodeData, "idle");
@@ -134,20 +144,25 @@ async function executeTestWorkflow({
   }
 
   try {
-    // Start the execution via API
-    const response = await fetch(`/api/workflow/${workflowId}/execute`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ input: {} }),
-    });
+    validateWorkflowNodesForRun(nodes);
 
-    if (!response.ok) {
-      throw new Error("Failed to execute workflow");
+    const startResult = await postWorkflowExecute(workflowId);
+
+    if (setLastExecuteApiResponse) {
+      setLastExecuteApiResponse({
+        path: startResult.path,
+        statusCode: startResult.statusCode,
+        durationMs: startResult.durationMs,
+        executionId: startResult.executionId,
+        status: startResult.status,
+        at: Date.now(),
+      });
     }
 
-    const result = await response.json();
+    const result = {
+      executionId: startResult.executionId,
+      status: startResult.status,
+    };
 
     // Select the new execution
     setSelectedExecutionId(result.executionId);
@@ -206,6 +221,7 @@ type WorkflowHandlerParams = {
   currentWorkflowId: string | null;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  hasUnsavedChanges: boolean;
   updateNodeData: (update: {
     id: string;
     data: { status?: "idle" | "running" | "success" | "error" };
@@ -224,6 +240,7 @@ function useWorkflowHandlers({
   currentWorkflowId,
   nodes,
   edges,
+  hasUnsavedChanges,
   updateNodeData,
   setIsExecuting,
   setIsSaving,
@@ -235,6 +252,7 @@ function useWorkflowHandlers({
   setSelectedExecutionId,
 }: WorkflowHandlerParams) {
   const [showUnsavedRunDialog, setShowUnsavedRunDialog] = useState(false);
+  const setLastExecuteApiResponse = useSetAtom(lastExecuteApiResponseAtom);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cleanup polling interval on unmount
@@ -286,11 +304,15 @@ function useWorkflowHandlers({
       pollingIntervalRef,
       setIsExecuting,
       setSelectedExecutionId,
+      setLastExecuteApiResponse,
     });
     // Don't set executing to false here - let polling handle it
   };
 
   const handleExecute = async () => {
+    if (hasUnsavedChanges) {
+      await handleSave();
+    }
     await executeWorkflow();
   };
 
@@ -418,6 +440,7 @@ function useWorkflowActions(state: ReturnType<typeof useWorkflowState>) {
     setIsExecuting,
     setIsSaving,
     setHasUnsavedChanges,
+    hasUnsavedChanges,
     setShowClearDialog,
     clearWorkflow,
     setShowDeleteDialog,
@@ -443,6 +466,7 @@ function useWorkflowActions(state: ReturnType<typeof useWorkflowState>) {
     currentWorkflowId,
     nodes,
     edges,
+    hasUnsavedChanges,
     updateNodeData,
     setIsExecuting,
     setIsSaving,

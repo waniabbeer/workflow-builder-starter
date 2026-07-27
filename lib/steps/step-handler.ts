@@ -20,8 +20,9 @@ function getApiBaseUrl(): string {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-  // Local development fallback
-  return "http://localhost:3000";
+  // Local development fallback (match next dev when PORT is set)
+  const port = process.env.PORT || "3000";
+  return `http://localhost:${port}`;
 }
 
 export type StepContext = {

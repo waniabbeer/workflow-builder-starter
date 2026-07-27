@@ -20,6 +20,7 @@ import { getRelativeTime } from "@/lib/utils/time";
 import {
   currentWorkflowIdAtom,
   executionLogsAtom,
+  lastExecuteApiResponseAtom,
   selectedExecutionIdAtom,
 } from "@/lib/workflow-store";
 import { Button } from "../ui/button";
@@ -270,6 +271,41 @@ function ExecutionLogEntry({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ExecuteApiFeedback() {
+  const [lastExecute] = useAtom(lastExecuteApiResponseAtom);
+
+  if (!lastExecute) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
+      <div className="font-medium text-foreground text-sm">
+        API response (instant — workflow still running)
+      </div>
+      <div className="font-mono text-muted-foreground">
+        POST {lastExecute.path} {lastExecute.statusCode}{" "}
+        {lastExecute.durationMs}ms
+      </div>
+      <pre className="overflow-x-auto rounded-md bg-muted/80 p-2 font-mono text-[11px] text-foreground">
+        {JSON.stringify(
+          {
+            executionId: lastExecute.executionId,
+            status: lastExecute.status,
+          },
+          null,
+          2
+        )}
+      </pre>
+      <p className="text-muted-foreground leading-relaxed">
+        Same request appears in Chrome DevTools → Network (filter{" "}
+        <span className="font-mono">execute</span>). Console also logs this
+        line after Run.
+      </p>
     </div>
   );
 }
@@ -547,7 +583,9 @@ export function WorkflowRuns({
 
   if (executions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
+      <div className="flex flex-col">
+        <ExecuteApiFeedback />
+        <div className="flex flex-col items-center justify-center py-16">
         <div className="mb-3 rounded-lg border border-dashed p-4">
           <Play className="h-6 w-6 text-muted-foreground" />
         </div>
@@ -555,12 +593,14 @@ export function WorkflowRuns({
         <div className="mt-1 text-muted-foreground text-xs">
           Execute your workflow to see runs here
         </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      <ExecuteApiFeedback />
       {executions.map((execution, index) => {
         const isExpanded = expandedRuns.has(execution.id);
         const isSelected = selectedExecutionId === execution.id;

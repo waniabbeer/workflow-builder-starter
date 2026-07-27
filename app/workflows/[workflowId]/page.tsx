@@ -11,6 +11,10 @@ import { NodeConfigPanel } from "@/components/workflow/node-config-panel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@/lib/api-client";
 import {
+  postWorkflowExecute,
+  validateWorkflowNodesForRun,
+} from "@/lib/execute-workflow-client";
+import {
   currentWorkflowIdAtom,
   currentWorkflowNameAtom,
   edgesAtom,
@@ -21,6 +25,7 @@ import {
   isPanelAnimatingAtom,
   isSavingAtom,
   isSidebarCollapsedAtom,
+  lastExecuteApiResponseAtom,
   nodesAtom,
   propertiesPanelActiveTabAtom,
   rightPanelWidthAtom,
@@ -41,6 +46,7 @@ const WorkflowEditor = ({ params }: WorkflowPageProps) => {
   const isMobile = useIsMobile();
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom);
   const [isExecuting, setIsExecuting] = useAtom(isExecutingAtom);
+  const setLastExecuteApiResponse = useSetAtom(lastExecuteApiResponseAtom);
   const [_isSaving, setIsSaving] = useAtom(isSavingAtom);
   const [nodes] = useAtom(nodesAtom);
   const [edges] = useAtom(edgesAtom);
@@ -446,23 +452,23 @@ const WorkflowEditor = ({ params }: WorkflowPageProps) => {
     }
 
     try {
-      // Start the execution via API
-      const response = await fetch(
-        `/api/workflow/${currentWorkflowId}/execute`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ input: {} }),
-        }
-      );
+      validateWorkflowNodesForRun(nodes);
 
-      if (!response.ok) {
-        throw new Error("Failed to execute workflow");
-      }
+      const startResult = await postWorkflowExecute(currentWorkflowId);
 
-      const result = await response.json();
+      setLastExecuteApiResponse({
+        path: startResult.path,
+        statusCode: startResult.statusCode,
+        durationMs: startResult.durationMs,
+        executionId: startResult.executionId,
+        status: startResult.status,
+        at: Date.now(),
+      });
+
+      const result = {
+        executionId: startResult.executionId,
+        status: startResult.status,
+      };
 
       // Select the new execution
       setSelectedExecutionId(result.executionId);
@@ -508,6 +514,7 @@ const WorkflowEditor = ({ params }: WorkflowPageProps) => {
     setEdges,
     setSelectedNodeId,
     setSelectedExecutionId,
+    setLastExecuteApiResponse,
   ]);
 
   // Helper to check if target is an input element
